@@ -5,13 +5,12 @@ import { useState, useEffect } from 'react'
 import Editor from '@/components/editor/Editor'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { sampleDocContent } from '@/lib/sample-doc'
 
 export default function Home() {
   const [content, setContent] = useState<any>(null)
   const [editorInstance, setEditorInstance] = useState<any>(null)
 
-  // 初始化内容
+  // 初始化内容：优先从 LocalStorage 读取，否则为空
   useEffect(() => {
     const saved = localStorage.getItem('jianwei_draft_content')
     if (saved) {
@@ -24,28 +23,16 @@ export default function Home() {
       }
     }
     
-    // Fallback logic
-    console.log("Loading sample content...")
-    if (sampleDocContent) {
-        const lines = sampleDocContent.split('\n');
-        setContent({
-            type: 'doc',
-            content: lines.map(line => ({
-                type: 'paragraph' as const,
-                content: line.trim() === '' ? [] : [{ type: 'text' as const, text: line }]
-            }))
-        });
-    } else {
-        setContent({
-            type: 'doc',
-            content: [
-                {
-                    type: 'paragraph',
-                    content: [{ type: 'text', text: '开始撰写... ' }]
-                }
-            ]
-        })
-    }
+    // 默认空内容，等待用户输入
+    setContent({
+        type: 'doc',
+        content: [
+            {
+                type: 'paragraph',
+                content: []
+            }
+        ]
+    })
   }, [])
 
   // 自动保存
@@ -273,28 +260,76 @@ export default function Home() {
   /* Images */
   img {
     max-width: 100%;
-    height: auto;
-    border-radius: 8px;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-    margin: 2rem 0;
-    transition: transform 0.3s ease;
+    height: auto; 
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    margin: 1rem 0.5rem;
+    transition: all 0.2s ease;
+    cursor: zoom-in;
+    vertical-align: middle;
   }
   
+  /* 缩略图模式 */
   p img {
-      margin-left: auto;
-      margin-right: auto;
+      max-height: 200px;
+      width: auto;
       display: inline-block;
-      vertical-align: top;
-      margin: 10px;
   }
 
-  /* 居中图片 */
+  /* 居中图片容器 */
   p:has(img) {
       text-align: center;
   }
   
   img:hover {
-    transform: scale(1.01);
+    transform: scale(1.05);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+  }
+
+  /* Lightbox Overlay */
+  .lightbox-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  
+  .lightbox-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  
+  .lightbox-img {
+    max-width: 90%;
+    max-height: 90vh;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    border-radius: 4px;
+    transform: scale(0.95);
+    transition: transform 0.3s cubic-bezier(0.2, 0, 0.2, 1);
+  }
+  
+  .lightbox-overlay.active .lightbox-img {
+    transform: scale(1);
+  }
+  
+  .lightbox-close {
+    position: absolute;
+    top: 2rem;
+    right: 2rem;
+    color: white;
+    font-size: 2rem;
+    cursor: pointer;
+    background: none;
+    border: none;
   }
 
   blockquote {
@@ -357,6 +392,39 @@ export default function Home() {
 
 <script>
   document.addEventListener('DOMContentLoaded', () => {
+    // Lightbox Logic
+    const overlay = document.createElement('div');
+    overlay.className = 'lightbox-overlay';
+    overlay.innerHTML = '<button class="lightbox-close">&times;</button><img class="lightbox-img" src="" alt="Full view">';
+    document.body.appendChild(overlay);
+    
+    const lightboxImg = overlay.querySelector('.lightbox-img');
+    const closeBtn = overlay.querySelector('.lightbox-close');
+    
+    const closeLightbox = () => {
+        overlay.classList.remove('active');
+    };
+    
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay || e.target === closeBtn) {
+            closeLightbox();
+        }
+    });
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && overlay.classList.contains('active')) {
+            closeLightbox();
+        }
+    });
+    
+    document.querySelectorAll('.main-content img').forEach(img => {
+        img.addEventListener('click', () => {
+             lightboxImg.src = img.src;
+             overlay.classList.add('active');
+        });
+    });
+
+    // TOC and Observer Logic
     const toc = document.getElementById('toc');
     const headers = document.querySelectorAll('.main-content h1, .main-content h2, .main-content h3');
     
@@ -430,16 +498,14 @@ export default function Home() {
             <Button variant="outline" onClick={handleExport}>
               下载瑞士风格报告 (HTML)
             </Button>
-            <Button onClick={handlePolish} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-              ✨ AI 润色与扩展
-            </Button>
+            {/* AI 功能暂时隐藏 */}
           </div>
         </header>
 
         <Card className="min-h-[700px] flex flex-col shadow-md border-gray-200 dark:border-gray-800">
            <CardHeader className="pb-4">
-                <CardTitle>评估报告草稿</CardTitle>
-                <CardDescription>请在此撰写，内容将通过 LocalStorage 自动保存。</CardDescription>
+                <CardTitle>草稿编辑器</CardTitle>
+                <CardDescription>所见即所得，内容将通过 LocalStorage 自动保存。</CardDescription>
            </CardHeader>
            <CardContent className="flex-1 p-0 overflow-hidden rounded-b-xl border-t border-gray-100 dark:border-gray-800">
              {/* 只有在 content 加载完成后才渲染 Editor，避免覆盖为空 */}
@@ -449,26 +515,31 @@ export default function Home() {
            </CardContent>
         </Card>
         
-        <div className="text-xs text-gray-400">
-            <button 
-                onClick={() => setDebugOpen(!debugOpen)} 
-                className="hover:text-gray-600 underline focus:outline-none"
-            >
-                {debugOpen ? '▼ 收起调试信息' : '▶ 调试：查看 JSON 数据'}
-            </button>
+        <div className="text-xs text-gray-400 mt-4 border-t pt-4">
+            <h3 className="font-semibold text-gray-500 mb-2">调试与开发选项</h3>
+            <div className="flex items-center gap-4">
+                <button 
+                    onClick={() => { 
+                        if(confirm('确定要清空所有草稿内容吗？此操作不可恢复。')) {
+                            localStorage.removeItem('jianwei_draft_content'); 
+                            window.location.reload(); 
+                        }
+                    }}
+                    className="text-red-500 hover:text-red-600 underline text-sm"
+                >
+                    ⚠ 重置并清空草稿
+                </button>
+                
+                <button 
+                    onClick={() => setDebugOpen(!debugOpen)} 
+                    className="text-blue-500 hover:text-blue-600 underline text-sm"
+                >
+                    {debugOpen ? '收起文档源码' : '查看文档 JSON 源码'}
+                </button>
+            </div>
+            
             {debugOpen && (
                 <div className="mt-2">
-                    <div className="flex justify-between mb-1">
-                        <span>当前文档结构 (JSON):</span>
-                        <div className="space-x-4">
-                           <button 
-                                onClick={() => { localStorage.removeItem('jianwei_draft_content'); window.location.reload(); }}
-                                className="text-red-400 hover:text-red-500"
-                            >
-                                清空缓存并重置
-                            </button>
-                        </div>
-                    </div>
                     <pre className="bg-gray-900 p-4 rounded overflow-auto max-h-64 text-green-400 font-mono">
                         {JSON.stringify(content, null, 2)}
                     </pre>
